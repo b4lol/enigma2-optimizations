@@ -352,7 +352,18 @@ EOF
     
     # 8. Reload Enigma2 services and bouquets (to apply changes immediately without restart)
     echo "[+] Reloading Enigma2 services and bouquets..."
-    ${SSH_CMD} "wget -qO - \"http://127.0.0.1/web/servicelistreload?mode=0\""
+    ${SSH_CMD} "
+        echo '[+] Waiting for OpenWebif to become responsive...'
+        for i in \$(seq 1 15); do
+            if wget -qO - http://127.0.0.1/web/servicelistreload?mode=0 >/dev/null 2>&1; then
+                echo '[+] Enigma2 bouquets successfully reloaded.'
+                exit 0
+            fi
+            sleep 2
+        done
+        echo '[!] Warning: Failed to reload bouquets via OpenWebif (timed out).'
+        exit 1
+    "
     
     echo "[+] Bouquet modernization deployed successfully!"
 fi
