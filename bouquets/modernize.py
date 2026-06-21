@@ -4,7 +4,7 @@ import re
 bouquet_dir = os.path.dirname(os.path.abspath(__file__))
 lamedb_path = os.path.join(bouquet_dir, 'lamedb')
 
-# 1. Parse lamedb to map channel references to names
+# 1. Parse lamedb to map channel references to names and providers
 services = {}
 if os.path.exists(lamedb_path):
     try:
@@ -24,7 +24,16 @@ if os.path.exists(lamedb_path):
                     srv_id, namespace, ts_id, net_id, srv_type = parts[:5]
                     key = (srv_id.lower().lstrip('0'), ts_id.lower().lstrip('0'), net_id.lower().lstrip('0'))
                     name = lines[i+1].strip()
-                    services[key] = name
+                    
+                    provider_raw = ''
+                    if i + 2 < len(lines):
+                        line3 = lines[i+2].strip()
+                        if line3.startswith('p:'):
+                            prov_part = line3.split(',')[0]
+                            if ':' in prov_part:
+                                provider_raw = prov_part.split(':', 1)[1].strip()
+                                
+                    services[key] = (name, provider_raw)
                     i += 3
                 else:
                     i += 1
@@ -33,8 +42,35 @@ if os.path.exists(lamedb_path):
 
 print('Loaded ' + str(len(services)) + ' channel names from lamedb.')
 
-# 2. Find all downloaded Turksat bouquets
-files = [f for f in os.listdir(bouquet_dir) if f.startswith('userbouquet.420e_') and f.endswith('.tv')]
+# 2. Find all Turksat bouquets (both raw and already modernized)
+files = [f for f in os.listdir(bouquet_dir) if (f.startswith('userbouquet.420e_') or f.startswith('userbouquet.tr_')) and f.endswith('.tv')]
+
+# Provider name mapping to user-friendly format
+provider_mapping = {
+    'Digital Platform': 'Digiturk',
+    'D-Smart': 'D-Smart',
+    'D-SMART': 'D-Smart',
+    'DOGAN TV': 'D-Smart',
+    'DOGAN': 'D-Smart',
+    'DEMIROREN MEDYA': 'D-Smart',
+    'DEMIROREN': 'D-Smart',
+    'TTNET': 'Tivibu',
+    'TURKSAT': 'FTA',
+    'TÜRKSAT': 'FTA',
+    'TRT': 'FTA',
+    'TÜRK TELEKOM': 'Tivibu',
+    'TURK TELEKOM': 'Tivibu',
+}
+
+def get_channel_display_name(name, provider_raw):
+    prov = provider_mapping.get(provider_raw, provider_raw)
+    if not prov:
+        prov = 'FTA'
+    
+    # Strip any existing suffix if we're reprocessing
+    import re
+    name_clean = re.sub(r'\s*\((Digiturk|D-Smart|Tivibu|FTA|Turksat)\)', '', name, flags=re.IGNORECASE)
+    return '{} ({})'.format(name_clean, prov)
 
 # 3. Read channels and prevent duplicates
 unique_channels = {}
@@ -54,10 +90,11 @@ for filename in files:
                     ts_id = parts[4].lower().lstrip('0')
                     net_id = parts[5].lower().lstrip('0')
                     
-                    ch_name = services.get((srv_id, ts_id, net_id), 'Unknown')
+                    name, provider_raw = services.get((srv_id, ts_id, net_id), ('Unknown', ''))
+                    ch_display = get_channel_display_name(name, provider_raw)
                     sref_standard = ':'.join(parts[:7]) + ':0:0:0:'
                     if sref_standard not in unique_channels:
-                        unique_channels[sref_standard] = ch_name
+                        unique_channels[sref_standard] = ch_display
 
 print('Found ' + str(len(unique_channels)) + ' unique Turksat channels.')
 
@@ -157,7 +194,7 @@ for cat_key, (filename, displayName) in genre_files.items():
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write('#NAME {}\n'.format(displayName))
         for name, sref in channels:
-            f.write('#SERVICE {}\n'.format(sref))
+            f.write('#SERVICE {}:{}\n'.format(sref, name))
     print('Generated modular bouquet: ' + filename + ' with ' + str(len(channels)) + ' channels.')
 
 # Ensure favourites.tv is present
