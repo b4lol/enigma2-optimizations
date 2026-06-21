@@ -242,6 +242,54 @@ if [[ "$INSTALL_CI" =~ ^[Yy]$ ]]; then
     "
 fi
 
+# 7.5. Apply PluginBrowser catalog download fix (patch pur-e2.club/OU -> pur-e2.club)
+echo "----------------------------------------------------------"
+read -p "Do you want to patch PluginBrowser to repair the plugin catalog? [Y/n]: " PATCH_BROWSER
+PATCH_BROWSER="${PATCH_BROWSER:-y}"
+
+if [[ "$PATCH_BROWSER" =~ ^[Yy]$ ]]; then
+    echo "[+] Applying PluginBrowser catalog download patch..."
+    ${SSH_CMD} "python3 -c '
+import marshal, os
+
+pyc_path = \"/usr/lib/enigma2/python/Screens/PluginBrowser.pyc\"
+if os.path.exists(pyc_path):
+    print(\"[+] Found PluginBrowser.pyc on receiver.\")
+    with open(pyc_path, \"rb\") as f:
+        header = f.read(16)
+        try:
+            co = marshal.load(f)
+        except Exception as e:
+            print(\"[!] Error reading pyc file:\", e)
+            co = None
+            
+    if co:
+        consts = list(co.co_consts)
+        replaced = False
+        for i, c in enumerate(consts):
+            if c == \"pur-e2.club/OU\":
+                consts[i] = \"pur-e2.club\"
+                replaced = True
+                print(f\"[+] Replaced constant at index {i}\")
+                
+        if replaced:
+            # Backup original if not already backed up
+            if not os.path.exists(pyc_path + \".bak\"):
+                os.system(f\"cp {pyc_path} {pyc_path}.bak\")
+                print(\"[+] Created backup at PluginBrowser.pyc.bak\")
+                
+            new_co = co.replace(co_consts=tuple(consts))
+            with open(pyc_path, \"wb\") as f:
+                f.write(header)
+                marshal.dump(new_co, f)
+            print(\"[+] Patched PluginBrowser.pyc successfully.\")
+        else:
+            print(\"[!] pur-e2.club/OU constant not found. Already patched or not a PurE2 image.\")
+else:
+    print(\"[!] PluginBrowser.pyc not found at standard location.\")
+' || true"
+fi
+
 # 8. Deploy STB Hardware Optimizations & Enigma2 Monitor Daemon
 echo "----------------------------------------------------------"
 read -p "Do you want to deploy Enigma2 PID Monitor Daemon & STB hardware tweaks (rc.local)? [y/N]: " DEPLOY_MONITOR
@@ -309,7 +357,15 @@ for line in remote_bouquets.splitlines():
         if match:
             bq_file = match.group(1)
             # If it is not one of our modular ones and not the old 420e ones, keep it
-            if not bq_file.startswith('userbouquet.tr_') and not bq_file.startswith('userbouquet.420e_') and bq_file != 'userbouquet.favourites.tv':
+            is_our_bouquet = (
+                bq_file.startswith('userbouquet.tr_') or 
+                bq_file.startswith('userbouquet.digiturk_') or 
+                bq_file.startswith('userbouquet.dsmart_') or 
+                bq_file.startswith('userbouquet.tivibu_') or 
+                bq_file.startswith('userbouquet.420e_') or 
+                bq_file == 'userbouquet.favourites.tv'
+            )
+            if not is_our_bouquet:
                 iptv_bouquets.append(line)
 
 print('[+] Found {} custom/IPTV bouquets to preserve on receiver.'.format(len(iptv_bouquets)))
@@ -337,18 +393,17 @@ with open(temp_bq_path, 'w', encoding='utf-8') as f:
 print('[+] Created merged bouquets.tv containing both local TV channels and remote IPTV bouquets.')
 EOF
     
-    # 6. Copy modular userbouquets and merged bouquets.tv to receiver
+    # 6. Clean up old raw and modular TV bouquets on receiver to prevent obsolete junk
+    echo "[+] Cleaning up old TV bouquets on receiver..."
+    ${SSH_CMD} "rm -f /etc/enigma2/userbouquet.tr_*.tv /etc/enigma2/userbouquet.digiturk_*.tv /etc/enigma2/userbouquet.dsmart_*.tv /etc/enigma2/userbouquet.tivibu_*.tv /etc/enigma2/userbouquet.420e_*.tv"
+
+    # 7. Copy modular userbouquets and merged bouquets.tv to receiver
     echo "[+] Uploading modular TV bouquet files to receiver..."
-    ${SCP_CMD} ${SCRIPT_DIR}/bouquets/userbouquet.tr_*.tv "${REC_USER}@${REC_IP}:/etc/enigma2/"
-    ${SCP_CMD} "${SCRIPT_DIR}/bouquets/userbouquet.favourites.tv" "${REC_USER}@${REC_IP}:/etc/enigma2/"
+    ${SCP_CMD} ${SCRIPT_DIR}/bouquets/userbouquet.*.tv "${REC_USER}@${REC_IP}:/etc/enigma2/"
     ${SCP_CMD} "${SCRIPT_DIR}/bouquets/bouquets.tv.merged" "${REC_USER}@${REC_IP}:/etc/enigma2/bouquets.tv"
     
     # Clean up local temporary merged file
     rm -f "${SCRIPT_DIR}/bouquets/bouquets.tv.merged"
-    
-    # 7. Clean up old raw satellite files on receiver
-    echo "[+] Cleaning up old raw Turksat satellite bouquets on receiver..."
-    ${SSH_CMD} "rm -f /etc/enigma2/userbouquet.420e_*.tv"
     
     # 8. Reload Enigma2 services and bouquets (to apply changes immediately without restart)
     echo "[+] Reloading Enigma2 services and bouquets..."
