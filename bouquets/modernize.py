@@ -43,16 +43,21 @@ for filename in files:
     with open(path, 'r', encoding='utf-8', errors='ignore') as f:
         lines = f.readlines()
     for line in lines:
-        match = re.search(r'#SERVICE\s+([^:]+:[^:]+:[^:]+:([^:]+):([^:]+):([^:]+):([^:]+):)', line)
-        if match:
-            sref = match.group(1)
-            srv_id = match.group(2).lower().lstrip('0')
-            ts_id = match.group(3).lower().lstrip('0')
-            net_id = match.group(4).lower().lstrip('0')
-            
-            ch_name = services.get((srv_id, ts_id, net_id), 'Unknown')
-            if sref not in unique_channels:
-                unique_channels[sref] = ch_name
+        line_stripped = line.strip()
+        if line_stripped.startswith('#SERVICE'):
+            parts_sref = line_stripped.split()
+            if len(parts_sref) >= 2:
+                sref_full = parts_sref[1]
+                parts = sref_full.split(':')
+                if len(parts) >= 7:
+                    srv_id = parts[3].lower().lstrip('0')
+                    ts_id = parts[4].lower().lstrip('0')
+                    net_id = parts[5].lower().lstrip('0')
+                    
+                    ch_name = services.get((srv_id, ts_id, net_id), 'Unknown')
+                    sref_standard = ':'.join(parts[:7]) + ':0:0:0:'
+                    if sref_standard not in unique_channels:
+                        unique_channels[sref_standard] = ch_name
 
 print('Found ' + str(len(unique_channels)) + ' unique Turksat channels.')
 
@@ -152,7 +157,7 @@ for cat_key, (filename, displayName) in genre_files.items():
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write('#NAME {}\n'.format(displayName))
         for name, sref in channels:
-            f.write('{}\n'.format(sref))
+            f.write('#SERVICE {}\n'.format(sref))
     print('Generated modular bouquet: ' + filename + ' with ' + str(len(channels)) + ' channels.')
 
 # Ensure favourites.tv is present
