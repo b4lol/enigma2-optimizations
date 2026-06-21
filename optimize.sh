@@ -7,11 +7,6 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# Default Receiver Credentials
-DEFAULT_IP="192.168.1.6"
-DEFAULT_USER="root"
-DEFAULT_PASS="root"
-
 # Configuration Files Paths (Relative to script directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSCTL_SRC="${SCRIPT_DIR}/configs/sysctl.conf"
@@ -24,16 +19,25 @@ echo "=========================================================="
 echo "      Enigma2 Performance & CI+ Optimization Suite        "
 echo "=========================================================="
 
-# 1. Prompt User for Receiver IP & Credentials
-read -p "Enter Enigma2 Receiver IP [${DEFAULT_IP}]: " REC_IP
-REC_IP="${REC_IP:-$DEFAULT_IP}"
+# 1. Prompt User for Receiver IP & Credentials (No hardcoded defaults for security/portability)
+read -p "Enter Enigma2 Receiver IP Address: " REC_IP
+if [ -z "$REC_IP" ]; then
+    echo "[!] Error: Receiver IP is required."
+    exit 1
+fi
 
-read -p "Enter SSH Username [${DEFAULT_USER}]: " REC_USER
-REC_USER="${REC_USER:-$DEFAULT_USER}"
+read -p "Enter SSH Username (e.g. root): " REC_USER
+if [ -z "$REC_USER" ]; then
+    echo "[!] Error: SSH Username is required."
+    exit 1
+fi
 
-read -s -p "Enter SSH Password [${DEFAULT_PASS}]: " REC_PASS
+read -s -p "Enter SSH Password: " REC_PASS
 echo ""
-REC_PASS="${REC_PASS:-$DEFAULT_PASS}"
+if [ -z "$REC_PASS" ]; then
+    echo "[!] Error: SSH Password is required."
+    exit 1
+fi
 
 # Check for sshpass dependency
 if ! command -v sshpass &> /dev/null; then
@@ -50,7 +54,7 @@ if ! ${SSH_CMD} "echo 'Connection successful!'" &> /dev/null; then
     exit 1
 fi
 
-# 2. Install Required Player Packages
+# 2. Update and Install Required Player Packages
 echo "[+] Updating opkg package lists and installing media packages on receiver..."
 ${SSH_CMD} "opkg update && opkg install enigma2-plugin-systemplugins-serviceapp exteplayer3 ffmpeg gstplayer"
 
