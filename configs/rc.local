@@ -1,0 +1,29 @@
+#!/bin/sh -e
+#
+# rc.local
+# Created by b4lol
+
+# Set CPU scaling governor to performance for all CPUs
+for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    if [ -f "$cpu" ]; then
+        echo performance > "$cpu"
+    fi
+done
+
+# Optimize I/O Scheduler and Read Ahead for eMMC
+echo deadline > /sys/block/mmcblk0/queue/scheduler
+echo 512 > /sys/block/mmcblk0/queue/read_ahead_kb
+
+# Optimize Picture and Color Quality
+echo 00000010 > /proc/stb/vmpeg/0/pep_scaler_sharpness
+echo 00000004 > /proc/stb/vmpeg/0/pep_sharpness
+echo enable > /proc/stb/vmpeg/0/pep_scaler_vertical_dejagging
+echo 00000002 > /proc/stb/vmpeg/0/pep_dynamic_contrast
+echo 00000001 > /proc/stb/vmpeg/0/pep_auto_flesh
+echo 00008400 > /proc/stb/vmpeg/0/pep_saturation
+echo 1 > /proc/stb/vmpeg/0/pep_apply
+
+# Start the Enigma2 monitor daemon in background
+/usr/bin/enigma2_monitor.sh >/dev/null 2>&1 &
+
+exit 0
