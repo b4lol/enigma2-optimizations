@@ -339,7 +339,7 @@ EOF
     
     # 6. Copy modular userbouquets and merged bouquets.tv to receiver
     echo "[+] Uploading modular TV bouquet files to receiver..."
-    ${SCP_CMD} "${SCRIPT_DIR}/bouquets/userbouquet.tr_*.tv" "${REC_USER}@${REC_IP}:/etc/enigma2/"
+    ${SCP_CMD} ${SCRIPT_DIR}/bouquets/userbouquet.tr_*.tv "${REC_USER}@${REC_IP}:/etc/enigma2/"
     ${SCP_CMD} "${SCRIPT_DIR}/bouquets/userbouquet.favourites.tv" "${REC_USER}@${REC_IP}:/etc/enigma2/"
     ${SCP_CMD} "${SCRIPT_DIR}/bouquets/bouquets.tv.merged" "${REC_USER}@${REC_IP}:/etc/enigma2/bouquets.tv"
     
