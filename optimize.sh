@@ -274,6 +274,90 @@ if [[ "$DEPLOY_MONITOR" =~ ^[Yy]$ ]]; then
     fi
 fi
 
+# 9. Deploy Modernized & Modular TV Bouquets
+echo "----------------------------------------------------------"
+read -p "Do you want to deploy the modernized & modular TV bouquets? [y/N]: " DEPLOY_BOUQUETS
+DEPLOY_BOUQUETS="${DEPLOY_BOUQUETS:-n}"
+
+if [[ "$DEPLOY_BOUQUETS" =~ ^[Yy]$ ]]; then
+    echo "[+] Preparing modular TV bouquets deployment..."
+    
+    # Run python locally using a heredoc to merge remote IPTV bouquets into local bouquets.tv
+    python3 - <<EOF
+import re
+import os
+import subprocess
+
+rec_ip = '${REC_IP}'
+rec_user = '${REC_USER}'
+rec_pass = '${REC_PASS}'
+ssh_cmd = 'sshpass -p ' + rec_pass + ' ssh -o StrictHostKeyChecking=no ' + rec_user + '@' + rec_ip
+scp_cmd = 'sshpass -p ' + rec_pass + ' scp -o StrictHostKeyChecking=no'
+
+# 1. Fetch remote bouquets.tv content
+try:
+    remote_bouquets = subprocess.check_output(ssh_cmd + ' "cat /etc/enigma2/bouquets.tv"', shell=True).decode('utf-8')
+except Exception as e:
+    print('[!] Error reading remote bouquets.tv:', e)
+    remote_bouquets = ''
+
+# 2. Extract IPTV / other non-satellite user bouquets from remote
+iptv_bouquets = []
+for line in remote_bouquets.splitlines():
+    if 'FROM BOUQUET' in line:
+        match = re.search(r'"(userbouquet\.[^"]+)"', line)
+        if match:
+            bq_file = match.group(1)
+            # If it is not one of our modular ones and not the old 420e ones, keep it
+            if not bq_file.startswith('userbouquet.tr_') and not bq_file.startswith('userbouquet.420e_') and bq_file != 'userbouquet.favourites.tv':
+                iptv_bouquets.append(line)
+
+print('[+] Found {} custom/IPTV bouquets to preserve on receiver.'.format(len(iptv_bouquets)))
+
+# 3. Read local bouquets.tv
+local_bq_path = os.path.join('${SCRIPT_DIR}', 'bouquets', 'bouquets.tv')
+with open(local_bq_path, 'r', encoding='utf-8') as f:
+    local_bq_lines = f.readlines()
+
+# 4. Generate merged bouquets.tv content
+merged_lines = []
+for line in local_bq_lines:
+    if line.strip():
+        merged_lines.append(line.strip())
+for line in iptv_bouquets:
+    merged_lines.append(line.strip())
+
+merged_content = '\n'.join(merged_lines) + '\n'
+
+# 5. Write temporarily to a merged file
+temp_bq_path = os.path.join('${SCRIPT_DIR}', 'bouquets', 'bouquets.tv.merged')
+with open(temp_bq_path, 'w', encoding='utf-8') as f:
+    f.write(merged_content)
+
+print('[+] Created merged bouquets.tv containing both local TV channels and remote IPTV bouquets.')
+EOF
+    
+    # 6. Copy modular userbouquets and merged bouquets.tv to receiver
+    echo "[+] Uploading modular TV bouquet files to receiver..."
+    ${SCP_CMD} "${SCRIPT_DIR}/bouquets/userbouquet.tr_*.tv" "${REC_USER}@${REC_IP}:/etc/enigma2/"
+    ${SCP_CMD} "${SCRIPT_DIR}/bouquets/userbouquet.favourites.tv" "${REC_USER}@${REC_IP}:/etc/enigma2/"
+    ${SCP_CMD} "${SCRIPT_DIR}/bouquets/bouquets.tv.merged" "${REC_USER}@${REC_IP}:/etc/enigma2/bouquets.tv"
+    
+    # Clean up local temporary merged file
+    rm -f "${SCRIPT_DIR}/bouquets/bouquets.tv.merged"
+    
+    # 7. Clean up old raw satellite files on receiver
+    echo "[+] Cleaning up old raw Turksat satellite bouquets on receiver..."
+    ${SSH_CMD} "rm -f /etc/enigma2/userbouquet.420e_*.tv"
+    
+    # 8. Reload Enigma2 services and bouquets (to apply changes immediately without restart)
+    echo "[+] Reloading Enigma2 services and bouquets..."
+    ${SSH_CMD} "wget -qO - \"http://127.0.0.1/web/servicelistreload?mode=0\""
+    
+    echo "[+] Bouquet modernization deployed successfully!"
+fi
+
 echo "=========================================================="
 echo "[+] All optimizations and repairs completed successfully!  "
 echo "=========================================================="
+
