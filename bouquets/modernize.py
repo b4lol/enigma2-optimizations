@@ -43,37 +43,42 @@ if os.path.exists(lamedb_path):
 print('Loaded ' + str(len(services)) + ' channel names from lamedb.')
 
 # 2. Find all Turksat bouquets (both raw and already modernized)
-files = [f for f in os.listdir(bouquet_dir) if (f.startswith('userbouquet.420e_') or f.startswith('userbouquet.tr_')) and f.endswith('.tv')]
+files = [f for f in os.listdir(bouquet_dir) if (
+    f.startswith('userbouquet.420e_') or 
+    f.startswith('userbouquet.tr_') or 
+    f.startswith('userbouquet.digiturk_') or 
+    f.startswith('userbouquet.dsmart_') or 
+    f.startswith('userbouquet.tivibu_')
+) and f.endswith('.tv')]
 
-# Provider name mapping to user-friendly format
+# Provider key mapping
 provider_mapping = {
-    'Digital Platform': 'Digiturk',
-    'D-Smart': 'D-Smart',
-    'D-SMART': 'D-Smart',
-    'DOGAN TV': 'D-Smart',
-    'DOGAN': 'D-Smart',
-    'DEMIROREN MEDYA': 'D-Smart',
-    'DEMIROREN': 'D-Smart',
-    'TTNET': 'Tivibu',
-    'TURKSAT': 'FTA',
-    'TÜRKSAT': 'FTA',
-    'TRT': 'FTA',
-    'TÜRK TELEKOM': 'Tivibu',
-    'TURK TELEKOM': 'Tivibu',
+    'Digital Platform': 'digiturk',
+    'D-Smart': 'dsmart',
+    'D-SMART': 'dsmart',
+    'DOGAN TV': 'dsmart',
+    'DOGAN': 'dsmart',
+    'DEMIROREN MEDYA': 'dsmart',
+    'DEMIROREN': 'dsmart',
+    'TTNET': 'tivibu',
+    'TURKSAT': 'tr',
+    'TÜRKSAT': 'tr',
+    'TRT': 'tr',
+    'TÜRK TELEKOM': 'tivibu',
+    'TURK TELEKOM': 'tivibu',
 }
 
-def get_channel_display_name(name, provider_raw):
-    prov = provider_mapping.get(provider_raw, provider_raw)
-    if not prov:
-        prov = 'FTA'
-    
-    # Strip any existing suffix if we're reprocessing
-    import re
-    name_clean = re.sub(r'\s*\((Digiturk|D-Smart|Tivibu|FTA|Turksat)\)', '', name, flags=re.IGNORECASE)
-    return '{} ({})'.format(name_clean, prov)
+provider_display_names = {
+    'tr': 'Türksat',
+    'digiturk': 'Digiturk',
+    'dsmart': 'D-Smart',
+    'tivibu': 'Tivibu'
+}
 
 # 3. Read channels and prevent duplicates
-unique_channels = {}
+unique_channels = {}  # sref -> (clean_name, provider_key)
+import re
+
 for filename in files:
     path = os.path.join(bouquet_dir, filename)
     with open(path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -84,6 +89,15 @@ for filename in files:
             parts_sref = line_stripped.split()
             if len(parts_sref) >= 2:
                 sref_full = parts_sref[1]
+                name_override = ''
+                if len(parts_sref) >= 2 and '::' in parts_sref[1]:
+                    sref_part, name_override = parts_sref[1].split('::', 1)
+                    sref_full = sref_part + ':'
+                elif ':' in parts_sref[1] and len(parts_sref[1].split(':')) > 10:
+                    parts_colons = parts_sref[1].split(':')
+                    name_override = parts_colons[-1]
+                    sref_full = ':'.join(parts_colons[:10]) + ':'
+                
                 parts = sref_full.split(':')
                 if len(parts) >= 7:
                     srv_id = parts[3].lower().lstrip('0')
@@ -91,24 +105,37 @@ for filename in files:
                     net_id = parts[5].lower().lstrip('0')
                     
                     name, provider_raw = services.get((srv_id, ts_id, net_id), ('Unknown', ''))
-                    ch_display = get_channel_display_name(name, provider_raw)
+                    if name == 'Unknown' and name_override:
+                        name = name_override
+                    
+                    # Clean up name (remove provider suffixes)
+                    name_clean = re.sub(r'\s*\((Digiturk|D-Smart|Tivibu|FTA|Turksat)\)', '', name, flags=re.IGNORECASE)
+                    
+                    provider_key = provider_mapping.get(provider_raw, 'tr')
                     sref_standard = ':'.join(parts[:7]) + ':0:0:0:'
+                    
                     if sref_standard not in unique_channels:
-                        unique_channels[sref_standard] = ch_display
+                        unique_channels[sref_standard] = (name_clean, provider_key)
 
 print('Found ' + str(len(unique_channels)) + ' unique Turksat channels.')
 
-# 4. Classify channels
-categories = {
-    'national': [],
-    'news': [],
-    'sports': [],
-    'movies': [],
-    'documentary': [],
-    'kids': [],
-    'music': [],
-    'others': []
+# 4. Classify channels into composite categories: (provider_key, genre_key)
+categories = {}
+genres = {
+    'national': 'Ulusal',
+    'news': 'Haberler',
+    'sports': 'Spor',
+    'movies': 'Sinema & Dizi',
+    'documentary': 'Belgesel',
+    'kids': 'Çocuk',
+    'music': 'Müzik',
+    'others': 'Diğer'
 }
+
+# Initialize categories
+for p_key in provider_display_names.keys():
+    for g_key in genres.keys():
+        categories[(p_key, g_key)] = []
 
 national_order = [
     'trt 1', 'trt1',
@@ -136,92 +163,87 @@ def get_national_priority(name):
             return idx
     return 999
 
-for sref, name in unique_channels.items():
+for sref, (name, provider_key) in unique_channels.items():
     n = name.lower()
     
     if not name or name == 'Unknown' or any(k in n for k in ['test', 'data', 'sid ', 'ch-']):
         continue
 
-    # Kids
+    # Classify genre
+    genre_key = 'others'
     if any(k in n for k in ['çocuk', 'cocuk', 'minika', 'cartoon', 'disney', 'nickelodeon', 'baby tv', 'trtcocuk']):
-        categories['kids'].append((name, sref))
-    # Music
+        genre_key = 'kids'
     elif any(k in n for k in ['müzik', 'muzik', 'dream tv', 'power', 'number one', 'kral', 'türkpop', 'number1', 'powerturk']):
-        categories['music'].append((name, sref))
-    # News
+        genre_key = 'music'
     elif any(k in n for k in ['haber', 'ntv', 'cnn', 'tgrt', 'tvnet', 'halk', 'tele1', 'sözcü', 'szc', 'ekol', 'bloomberg', 'a para', '24 hd', 'global']):
-        categories['news'].append((name, sref))
-    # Sports
+        genre_key = 'news'
     elif any(k in n for k in ['spor', 's sport', 'eurosport', 'bein sports', 'bein sport', 'tivibu spor', 'sportstv']):
-        categories['sports'].append((name, sref))
-    # Documentary
+        genre_key = 'sports'
     elif any(k in n for k in ['belgesel', 'yaban', 'history', 'nat geo', 'national geo', 'discovery']):
-        categories['documentary'].append((name, sref))
-    # Movies / Series
+        genre_key = 'documentary'
     elif any(k in n for k in ['sinema', 'movie', 'dizi', 'action', 'cinema', 'd-smart', 'film', 'tv2', 'teve2', 'tlc', 'dmax']):
-        categories['movies'].append((name, sref))
-    # National
+        genre_key = 'movies'
     elif any(k in n for k in ['trt 1', 'atv', 'star', 'show', 'kanal d', 'now', 'fox', 'tv8', 'kanal 7', 'tv8.5', 'beyaz', 'trt1', 'kanald', 'show tv', 'star tv', 'trt 1 hd']):
-        categories['national'].append((name, sref))
-    else:
-        categories['others'].append((name, sref))
+        genre_key = 'national'
+        
+    categories[(provider_key, genre_key)].append((name, sref))
 
 # Sort channels within categories
-categories['national'].sort(key=lambda x: get_national_priority(x[0]))
-categories['news'].sort(key=lambda x: x[0])
-categories['sports'].sort(key=lambda x: x[0])
-categories['movies'].sort(key=lambda x: x[0])
-categories['documentary'].sort(key=lambda x: x[0])
-categories['kids'].sort(key=lambda x: x[0])
-categories['music'].sort(key=lambda x: x[0])
-categories['others'].sort(key=lambda x: x[0])
+for key in categories.keys():
+    p_key, g_key = key
+    if g_key == 'national':
+        categories[key].sort(key=lambda x: get_national_priority(x[0]))
+    else:
+        categories[key].sort(key=lambda x: x[0])
 
-# 5. Write separate modular files
-genre_files = {
-    'national': ('userbouquet.tr_national.tv', '[42.0E] Türksat - Ulusal'),
-    'news': ('userbouquet.tr_news.tv', '[42.0E] Türksat - Haberler'),
-    'sports': ('userbouquet.tr_sports.tv', '[42.0E] Türksat - Spor'),
-    'movies': ('userbouquet.tr_movies.tv', '[42.0E] Türksat - Sinema & Dizi'),
-    'documentary': ('userbouquet.tr_documentary.tv', '[42.0E] Türksat - Belgesel'),
-    'kids': ('userbouquet.tr_kids.tv', '[42.0E] Türksat - Çocuk'),
-    'music': ('userbouquet.tr_music.tv', '[42.0E] Türksat - Müzik'),
-    'others': ('userbouquet.tr_others.tv', '[42.0E] Türksat - Diğer')
-}
+# 5. Write separate modular files and generate bouquets.tv index
+generated_files = set()
+bouquets_tv_entries = []
 
-for cat_key, (filename, displayName) in genre_files.items():
-    channels = categories[cat_key]
-    out_path = os.path.join(bouquet_dir, filename)
-    with open(out_path, 'w', encoding='utf-8') as f:
-        f.write('#NAME {}\n'.format(displayName))
-        for name, sref in channels:
-            f.write('#SERVICE {}:{}\n'.format(sref, name))
-    print('Generated modular bouquet: ' + filename + ' with ' + str(len(channels)) + ' channels.')
+# Define desired ordering for bouquets.tv
+provider_order = ['tr', 'digiturk', 'dsmart', 'tivibu']
+genre_order = ['national', 'news', 'sports', 'movies', 'documentary', 'kids', 'music', 'others']
+
+for p_key in provider_order:
+    p_display = provider_display_names[p_key]
+    for g_key in genre_order:
+        channels = categories[(p_key, g_key)]
+        if channels:
+            filename = 'userbouquet.{}_{}.tv'.format(p_key, g_key)
+            displayName = '[42.0E] {} - {}'.format(p_display, genres[g_key])
+            out_path = os.path.join(bouquet_dir, filename)
+            
+            with open(out_path, 'w', encoding='utf-8') as f:
+                f.write('#NAME {}\n'.format(displayName))
+                for name, sref in channels:
+                    f.write('#SERVICE {}:{}\n'.format(sref, name))
+            
+            print('Generated modular bouquet: {} with {} channels.'.format(filename, len(channels)))
+            generated_files.add(filename)
+            bouquets_tv_entries.append(filename)
 
 # Ensure favourites.tv is present
-fav_path = os.path.join(bouquet_dir, 'userbouquet.favourites.tv')
+fav_filename = 'userbouquet.favourites.tv'
+fav_path = os.path.join(bouquet_dir, fav_filename)
 if not os.path.exists(fav_path):
     with open(fav_path, 'w', encoding='utf-8') as f:
         f.write('#NAME Favourites (TV)\n')
     print('Created empty favourites bouquet.')
+generated_files.add(fav_filename)
 
-# Clean up all old userbouquet.420e_*.tv files
+# Clean up all old modular bouquet files that are no longer active
 for f in os.listdir(bouquet_dir):
-    if f.startswith('userbouquet.420e_') and f.endswith('.tv'):
-        os.remove(os.path.join(bouquet_dir, f))
-        print('Removed old raw file: ' + f)
+    if f.startswith('userbouquet.') and f.endswith('.tv'):
+        if f != fav_filename and f not in generated_files:
+            os.remove(os.path.join(bouquet_dir, f))
+            print('Removed obsolete bouquet file: ' + f)
 
-# Write local bouquets.tv containing only these modular satellite files
+# Write local bouquets.tv
 bq_path = os.path.join(bouquet_dir, 'bouquets.tv')
 with open(bq_path, 'w', encoding='utf-8') as f:
     f.write('#NAME User - Bouquets (TV)\n')
     f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.favourites.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_national.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_news.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_sports.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_movies.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_documentary.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_kids.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_music.tv" ORDER BY bouquet\n')
-    f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "userbouquet.tr_others.tv" ORDER BY bouquet\n')
+    for bq_file in bouquets_tv_entries:
+        f.write('#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "{}" ORDER BY bouquet\n'.format(bq_file))
 
 print('Successfully finalized bouquets.tv locally.')

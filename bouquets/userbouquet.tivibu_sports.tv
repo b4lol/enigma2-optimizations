@@ -1,0 +1,12 @@
+#NAME [42.0E] Tivibu - Spor
+#SERVICE 1:0:19:3b00:a98a:42e:1a40000:0:0:0::EDGE SPORT HD
+#SERVICE 1:0:19:39da:a989:42e:1a40000:0:0:0::S Sport
+#SERVICE 1:0:19:39db:a989:42e:1a40000:0:0:0::S Sport 2
+#SERVICE 1:0:19:39d2:a989:42e:1a40000:0:0:0::Tivibu Spor 1 HD
+#SERVICE 1:0:19:39d9:a989:42e:1a40000:0:0:0::Tivibu Spor 1 HD Ticari
+#SERVICE 1:0:19:3afc:a98a:42e:1a40000:0:0:0::Tivibu Spor 2 HD
+#SERVICE 1:0:19:3b17:a98a:42e:1a40000:0:0:0::Tivibu Spor 2 HD Ticari
+#SERVICE 1:0:19:3b1b:a98a:42e:1a40000:0:0:0::Tivibu Spor 3 HD
+#SERVICE 1:0:19:3b1c:a98a:42e:1a40000:0:0:0::Tivibu Spor 3 HD Ticari
+#SERVICE 1:0:19:39d1:a989:42e:1a40000:0:0:0::Tivibu Spor HD
+#SERVICE 1:0:19:39d8:a989:42e:1a40000:0:0:0::Tivibu Spor HD Ticari

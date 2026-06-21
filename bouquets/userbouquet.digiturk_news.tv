@@ -1,0 +1,4 @@
+#NAME [42.0E] Digiturk - Haberler
+#SERVICE 1:0:1:3752:4e85:2a:1a40000:0:0:0::Bloomberg
+#SERVICE 1:0:11:3755:4e85:2a:1a40000:0:0:0::CNN International HD
+#SERVICE 1:0:11:4270:78b5:2a:1a4ac01:0:0:0::France 24 HD (in English)

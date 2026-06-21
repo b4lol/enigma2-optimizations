@@ -1,0 +1,13 @@
+#NAME [42.0E] Tivibu - Sinema & Dizi
+#SERVICE 1:0:19:3e8e:a8c3:42e:1a40000:0:0:0::Sinema 1001 2 HD
+#SERVICE 1:0:19:3e8d:a8c3:42e:1a40000:0:0:0::Sinema 1001 HD
+#SERVICE 1:0:19:3e88:a8c3:42e:1a40000:0:0:0::Sinema Aile 2 HD
+#SERVICE 1:0:19:3e87:a8c3:42e:1a40000:0:0:0::Sinema Aile HD
+#SERVICE 1:0:19:3e85:a8c3:42e:1a40000:0:0:0::Sinema Aksiyon 2 HD
+#SERVICE 1:0:19:39d4:a989:42e:1a40000:0:0:0::Sinema Aksiyon HD
+#SERVICE 1:0:19:3e8c:a8c3:42e:1a40000:0:0:0::Sinema Komedi 2 HD
+#SERVICE 1:0:19:3e8b:a8c3:42e:1a40000:0:0:0::Sinema Komedi HD
+#SERVICE 1:0:19:39d7:a989:42e:1a40000:0:0:0::Sinema TV 2 HD
+#SERVICE 1:0:19:39d6:a989:42e:1a40000:0:0:0::Sinema TV HD
+#SERVICE 1:0:19:3b19:a98a:42e:1a40000:0:0:0::Sinema Yerli 2 HD
+#SERVICE 1:0:19:3e8f:a8c3:42e:1a40000:0:0:0::Sinema Yerli HD
