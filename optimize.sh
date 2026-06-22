@@ -14,6 +14,7 @@ RESOLV_SRC="${SCRIPT_DIR}/configs/resolv.conf"
 SETTINGS_SRC="${SCRIPT_DIR}/configs/settings.append"
 MONITOR_SRC="${SCRIPT_DIR}/configs/enigma2_monitor.sh"
 RCLOCAL_SRC="${SCRIPT_DIR}/configs/rc.local"
+SKIN_DIR="${SCRIPT_DIR}/skins/premium-fhd-black"
 
 echo "=========================================================="
 echo "      Enigma2 Performance & CI+ Optimization Suite        "
@@ -421,6 +422,59 @@ EOF
     "
     
     echo "[+] Bouquet modernization deployed successfully!"
+fi
+
+# 10. Deploy Premium-FHD-Black Skin (patched: posters/weather removed, bugfixes applied)
+echo "----------------------------------------------------------"
+read -p "Do you want to deploy the patched Premium-FHD-Black skin (no posters/weather, overlap & crash fixes)? [y/N]: " DEPLOY_SKIN
+DEPLOY_SKIN="${DEPLOY_SKIN:-n}"
+
+if [[ "$DEPLOY_SKIN" =~ ^[Yy]$ ]]; then
+    if [ ! -d "${SKIN_DIR}" ]; then
+        echo "[!] Warning: skins/premium-fhd-black not found locally. Skipping skin deployment."
+    else
+        echo "[+] Installing base Premium-FHD-Black skin package (if not already present)..."
+        ${SSH_CMD} "
+            if ! opkg list-installed | grep -q enigma2-plugin-skins-premium-fhd-black; then
+                cd /tmp
+                rm -f premium-fhd-black.ipk
+                wget -q --no-check-certificate -O premium-fhd-black.ipk 'https://satup.net/download.php?id=321&token=3ODg7QQ8fJym32RkjziQ6QgHuWHlo9LU&download'
+                opkg install /tmp/premium-fhd-black.ipk
+                rm -f /tmp/premium-fhd-black.ipk
+            else
+                echo '[+] Base skin package already installed.'
+            fi
+
+            # Remove the bundled AtileHD config plugin: its precompiled bytecode targets an
+            # older Python release and crashes the plugin list on this image's Python 3.13.
+            # No source is shipped, so it cannot be recompiled -- safe to drop (cosmetic only).
+            rm -rf /usr/lib/enigma2/python/Plugins/Extensions/AtileHD
+
+            # Drop the weather widget integration: OAWeather is intentionally not used by
+            # this skin variant, so remove it to stop the orphaned 'session.OAWeather'
+            # widgets (already patched out of skin_templates.xml) from being requested.
+            opkg remove enigma2-plugin-extensions-oaweather enigma2-tools-weatherinfo 2>/dev/null || true
+        "
+
+        echo "[+] Uploading patched skin.xml, skin_templates.xml and PremiumPosterX renderer fixes..."
+        ${SSH_CMD} "rm -f /usr/lib/enigma2/python/Components/Renderer/PremiumPosterX.pyc /usr/lib/enigma2/python/Components/Renderer/PremiumPosterXDownloadThread.pyc"
+        ${SCP_CMD} "${SKIN_DIR}/skin.xml" "${REC_USER}@${REC_IP}:/usr/share/enigma2/Premium-FHD-Black/skin.xml"
+        ${SCP_CMD} "${SKIN_DIR}/skin_templates.xml" "${REC_USER}@${REC_IP}:/usr/share/enigma2/Premium-FHD-Black/skin_templates.xml"
+        ${SCP_CMD} "${SKIN_DIR}/PremiumPosterX.py" "${REC_USER}@${REC_IP}:/usr/lib/enigma2/python/Components/Renderer/PremiumPosterX.py"
+        ${SCP_CMD} "${SKIN_DIR}/PremiumPosterXDownloadThread.py" "${REC_USER}@${REC_IP}:/usr/lib/enigma2/python/Components/Renderer/PremiumPosterXDownloadThread.py"
+
+        # Select the skin while Enigma2 is fully stopped: if the GUI is left running it
+        # rewrites /etc/enigma2/settings from memory on restart and silently undoes this.
+        echo "[+] Selecting Premium-FHD-Black as the active skin..."
+        ${SSH_CMD} "
+            init 4
+            sleep 5
+            sed -i '/^config.skin.primary_skin=/d' /etc/enigma2/settings
+            echo 'config.skin.primary_skin=Premium-FHD-Black/skin.xml' >> /etc/enigma2/settings
+            init 3
+        "
+        echo "[+] Premium-FHD-Black skin deployed. Enigma2 is restarting to apply it."
+    fi
 fi
 
 echo "=========================================================="

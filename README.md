@@ -30,6 +30,7 @@ The script will interactively ask for:
 3.  **SSH Password** (defaults to `root`)
 4.  **CI+ Helper (ciplushelper) Setup** (select `y` if you use a CI+ cam module)
 5.  **Enigma2 PID Monitor Daemon & STB optimizations (rc.local)** (select `y` to apply CPU, I/O, picture optimizations and the monitor daemon)
+6.  **Premium-FHD-Black Skin deployment** (select `y` to install the patched skin: posters and weather widget removed, crash fixes and text-overflow fixes applied)
 
 ---
 
@@ -54,6 +55,10 @@ The script will interactively ask for:
     *   `userbouquet.favourites.tv`: User Favorites list.
     *   `bouquets.tv`: Master satellite bouquets index file.
     *   `lamedb`: Master satellite transponder database for resolving names.
+*   `skins/premium-fhd-black/`: Patched version of the "Premium FHD Black" skin:
+    *   `skin.xml`: Main skin layout with poster widgets and orphaned/conflicting elements removed, and button-hint label boxes resized to fit longer (e.g. Turkish) translations without overlap.
+    *   `skin_templates.xml`: Shared button/info panel templates, with the same overlap fixes and the hardcoded weather widget references removed.
+    *   `PremiumPosterX.py` / `PremiumPosterXDownloadThread.py`: Poster renderer components with a thread-initialization crash fixed (deployed for stability even though poster widgets are removed from `skin.xml` by default).
 
 ---
 
@@ -101,3 +106,10 @@ To customize your TV channel lists:
 *   **Process Priority:** Elevates Enigma2 process priority (`renice -n -10`, `ionice -c 2 -n 0`, `oom_score_adj=-999`) to prevent stuttering.
 *   **Hardware Tweaks:** Sets all CPU scaling governors to `performance`, optimizes the eMMC I/O scheduler to `deadline` and read-ahead to `512 KB`.
 *   **Picture Enhancements:** Configures Broadcom pep parameters (dynamic contrast, horizontal/vertical dejagging, sharpness) for optimal picture quality on 4K/FHD channels.
+
+### 6. Premium-FHD-Black Skin (Patched, simplified)
+*   **Simplification:** All poster widgets (movie/series artwork boxes) and the weather widget have been removed from the skin layout and shared templates, leaving a clean, text/EPG-focused layout. Empty space left behind by their removal has been closed up across every affected screen.
+*   **Crash Fixes:** Fixed a renderer bug where `PremiumPosterX` and `PremiumPosterXDownloadThread` skipped their base-class `__init__`/`threading.Thread.__init__` calls behind a blocking network check, causing `AttributeError`/thread-start failures; fixed bad regex escape sequences in both files (`SyntaxWarning` under Python 3.13).
+*   **Structural Fixes:** Removed conflicting/duplicate button-hint panels (`button3temp` vs `button4temp`) that caused `KeyError`s for the red/green/yellow/blue button hints and a missing `MetrixMenuDescription` converter on the main menu; removed screen-specific orphaned widgets (`HelpWindow` in `TimerEditList`, legacy MessageBox icon widgets) that don't exist in this image's Python classes.
+*   **Text Overflow Fixes:** Enlarged and repositioned button-hint label boxes (`key_red`/`key_green`/`key_yellow`/`key_blue`, `key_menu`, `key_help`) throughout `skin.xml` and `skin_templates.xml` so longer translated strings (e.g. Turkish) no longer get clipped or overlap neighboring labels, including a follow-up fix for `PluginBrowserGrid`/`PluginBrowserList`/`PackageAction`/`PluginActionLog` where Python's embedded fallback skin positions collided with the widened hint boxes.
+*   **Deployment:** `optimize.sh` installs the base skin package from its official source if missing, removes the broken `AtileHD` plugin (incompatible precompiled bytecode, no available source) and the unused `OAWeather` packages, uploads the four patched files in `skins/premium-fhd-black/` to the receiver, and switches the active skin via the same safe `init 4` → edit `/etc/enigma2/settings` → `init 3` sequence used for the player settings merge (section 5), since Enigma2 overwrites settings changes made while it is still running.
